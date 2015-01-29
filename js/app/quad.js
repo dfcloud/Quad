@@ -44,7 +44,7 @@ function(config, Phaser, Block, color){
          */
         this.onDropComplete = [
             function () {
-                game.add.audio('attach').play();
+                game.add.audio('attach', 0.5).play();
             }
         ]
 
@@ -191,6 +191,16 @@ function(config, Phaser, Block, color){
     Quad.prototype.unbreakable = function(){
         this.blocks.map(function(block){block.unbreakable()});
         return this;
+    }
+
+    /**
+     * Update a quad to comply with new level
+     */
+    Quad.prototype.updateLevel = function(level) {
+        this.blocks.map(function(block) {
+            block.setColor(color.genRandomColor(level));
+            block.redraw();
+        });
     }
 
     return Quad;

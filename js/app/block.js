@@ -2,7 +2,8 @@
  * A module which exposes the Block type
  * @module app/block
  */
-define(["app/config", "app/grid"], function(config, grid){
+define(["app/config", "Phaser", "app/grid", "app/score"],
+function(config, Phaser, grid, score){
     "use strict"
 
     /**
@@ -41,6 +42,29 @@ define(["app/config", "app/grid"], function(config, grid){
     }
 
     /**
+     * Draw a block
+     */
+    Block.prototype.draw = function() {
+        // Main block body
+        this.graphics.lineStyle(1, 0x222222, 0.4);
+        this.graphics.beginFill(this.color, 1);
+        this.graphics.drawRoundedRect(0, 0, grid.cellSize, grid.cellSize, 1);
+        this.graphics.endFill();
+
+        // Inner shaded region
+        this.graphics.lineStyle(1, 0xCCCCCC, 0.2);
+        this.graphics.beginFill(0xAAAAAA, 0.2);
+        this.graphics.drawRoundedRect(1, 1, grid.cellSize-4, grid.cellSize-4, 2);
+        this.graphics.endFill();
+
+        // 'light' at top left corner
+        this.graphics.lineStyle(0);
+        this.graphics.beginFill(0xFFFFFF, 0.4);
+        this.graphics.drawRect(1, 1, 2, 2);
+        this.graphics.endFill();
+    }
+
+    /**
      * Show the block outside the grid.
      *
      * @param {Phaser.Point} [position] - Optional position on canvas to display at
@@ -54,24 +78,9 @@ define(["app/config", "app/grid"], function(config, grid){
         }
 
         if (!this.visible) {
-            // Main block body
-            this.graphics.lineStyle(1, 0x222222, 0.4);
-            this.graphics.beginFill(this.color, 1);
-            this.graphics.drawRoundedRect(0, 0, grid.cellSize, grid.cellSize, 1);
-            this.graphics.endFill();
-
-            // Inner shaded region
-            this.graphics.lineStyle(1, 0xCCCCCC, 0.2);
-            this.graphics.beginFill(0xAAAAAA, 0.2);
-            this.graphics.drawRoundedRect(1, 1, grid.cellSize-4, grid.cellSize-4, 2);
-            this.graphics.endFill();
-
-            // 'light' at top left corner
-            this.graphics.lineStyle(0);
-            this.graphics.beginFill(0xFFFFFF, 0.4);
-            this.graphics.drawRect(1, 1, 2, 2);
-            this.graphics.endFill();
+            this.draw();
         }
+
         this.visible = true;
         this.falling = false;
         return this;
@@ -140,6 +149,14 @@ define(["app/config", "app/grid"], function(config, grid){
         grid.contents[coord.y][coord.x] = this;
 
         if (!noAnimate && this.visible) {
+            var point = grid.coordToPoint(coord);
+            var distance = Phaser.Point.distance(this.graphics.position, point);
+
+            // animation time is a function of distance, so the block won't fall
+            // slower when its destination is nearby
+            var cells = distance/grid.cellSize;
+            var time = config.game.dropSpeed*cells;
+
             this.falling = true;
             var tween = this.game.add.tween(this.graphics);
             tween.onComplete.add(function(){
@@ -148,7 +165,7 @@ define(["app/config", "app/grid"], function(config, grid){
                     callback();
                 })
             }.bind(this));
-            tween.to(grid.coordToPoint(coord), 200);
+            tween.to(point, time);
             tween.start();
         } else {
             var point = grid.coordToPoint(coord);
@@ -238,12 +255,15 @@ define(["app/config", "app/grid"], function(config, grid){
         if (doClear) {
             var totalCleared = eraseBlocks(this) + grid.cleanup();
             this.displayClearedCount(totalCleared);
-            this.game.add.audio('destroy').play();
+            score.update(totalCleared);
         }
 
         return this;
     }
 
+    /**
+     * Display how many blocks are cleared.
+     */
     Block.prototype.displayClearedCount = function(count) {
         if (count <= 6) return this;
         var fontSize = function(count) {
@@ -273,8 +293,11 @@ define(["app/config", "app/grid"], function(config, grid){
 
     /**
      * Destroy a breakable block, with animation
+     *
+     * @param {boolean} [mute=false] - Do not play a sound on destruction
      */
-    Block.prototype.destroy = function(delay){
+    Block.prototype.destroy = function(delay, mute){
+        var mute = mute || false;
         if (this._unbreakable)
             return this;
 
@@ -295,6 +318,8 @@ define(["app/config", "app/grid"], function(config, grid){
             scaleTween.onComplete.add(function(){
                 this.graphics.destroy();
                 this.highlightGraphics.destroy();
+                if (!mute)
+                    this.game.add.audio('destroy', 0.3).play();
             }.bind(this));
         }.bind(this), delay*25);
         grid.contents[this.coord.y][this.coord.x] = undefined;
@@ -342,6 +367,24 @@ define(["app/config", "app/grid"], function(config, grid){
             this.display();
         }
         return this;
+    }
+
+    /**
+     * Set the color of a block
+     */
+    Block.prototype.setColor = function(color) {
+        this.color = color;
+    }
+
+    /**
+     * Redraw a block.
+     */
+    Block.prototype.redraw = function() {
+        this.graphics.destroy();
+        var point = grid.directionToPoint(this.direction, this.position, this.offset);
+        this.graphics = this.game.add.graphics(point.x, point.y);
+        this.highlightGraphics = this.game.add.graphics();
+        this.draw();
     }
 
     return Block;

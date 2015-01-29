@@ -2,7 +2,8 @@
  * Exposes a singleton Grid which defines the main gameplay field
  * @module app/grid
  */
-define(["app/config", "Phaser"], function(config, Phaser){
+define(["app/config", "Phaser", "app/music"],
+function(config, Phaser, music){
     "use strict"
 
     /**
@@ -41,9 +42,28 @@ define(["app/config", "Phaser"], function(config, Phaser){
      * Show the grid of 'cells' that the blocks can be moved around on
      */
     Grid.prototype.display = function(game) {
+        if (!this.game) {
+            this.game = game;
+        }
+        this.outerGraphic = game.add.graphics(this.offsets.x, this.offsets.y);
+        this.outerGraphic.lineStyle(1, 0xFFFFFF, 0.6);
+        this.outerGraphic.drawRect(0, 0, config.grid.size, config.grid.size);
+
+        music.onBeat.push(function(){
+            var tween = game.add.tween(this.outerGraphic.scale);
+            tween.to({x: 1.1, y:1.1}, 75).to({x:1, y:1}, 100).start();
+
+            var locationTween = game.add.tween(this.outerGraphic);
+            locationTween.to({
+                x: this.offsets.x - config.grid.size*0.05,
+                y: this.offsets.y - config.grid.size*0.05
+            }, 75).to({x: this.offsets.x, y: this.offsets.y}, 100).start();
+        }.bind(this));
+
+
         this.graphics = game.add.graphics(this.offsets.x, this.offsets.y);
         this.graphics.lineStyle(1, 0xFFFFFF, 0.2);
-        this.graphics.beginFill(0x666666, 0.1);
+        this.graphics.beginFill(0x666666, 0.3);
 
         if (config.grid.linesVisible) {
             for (var i=0; i < config.grid.numCells; ++i) {
@@ -191,6 +211,7 @@ define(["app/config", "Phaser"], function(config, Phaser){
         for (var i=0; i < config.grid.numCells; ++i) {
             temporary[i] = new Array(config.grid.numCells);
         }
+        var retn = null;
         switch(direction.toLowerCase()){
         case "top":
             var invalid = this.contents[0].some(function(val){
@@ -198,7 +219,8 @@ define(["app/config", "Phaser"], function(config, Phaser){
             });
 
             if (invalid) {
-                return false;
+                retn = false;
+                break;
             }
 
             this.contents.map(function(val, index){
@@ -214,7 +236,8 @@ define(["app/config", "Phaser"], function(config, Phaser){
             }.bind(this));
             this.middle.y -= 1;
             this.contents = temporary;
-            return true;
+            retn = true;
+            break;
 
         case "bottom":
             var invalid = this.contents[config.grid.numCells-1]
@@ -223,7 +246,8 @@ define(["app/config", "Phaser"], function(config, Phaser){
                 });
 
             if (invalid) {
-                return false;
+                retn = false;
+                break;
             }
 
             this.contents.map(function(val, index){
@@ -239,13 +263,17 @@ define(["app/config", "Phaser"], function(config, Phaser){
             }.bind(this));
             this.middle.y += 1;
             this.contents = temporary;
-            return true;
+            retn = true;
+            break;
 
         case "left":
             for (var i=0; i < config.grid.numCells; ++i){
-                if (this.at(0, i))
-                    return false;
+                if (this.at(0, i)) {
+                    retn = false;
+                    break;
+                }
             }
+            if (retn == false) break;
 
             this.contents.map(function(row, y){
                 row.map(function(val, x){
@@ -261,12 +289,16 @@ define(["app/config", "Phaser"], function(config, Phaser){
             }.bind(this));
             this.middle.x -= 1;
             this.contents = temporary;
-            return true;
+            retn = true;
+            break;
         case "right":
             for (var i=0; i < config.grid.numCells; ++i){
-                if (this.at(config.grid.numCells-1, i))
-                    return false;
+                if (this.at(config.grid.numCells-1, i)) {
+                    retn = false;
+                    break;
+                }
             }
+            if (retn == false) break;
 
             this.contents.map(function(row, y){
                 row.map(function(val, x){
@@ -282,10 +314,16 @@ define(["app/config", "Phaser"], function(config, Phaser){
             }.bind(this));
             this.middle.x += 1;
             this.contents = temporary;
-            return true;
+            retn = true
+            break;
         default:
             throw("Invalid argument to Quad.slide: " + direction)
         }
+
+        if (retn) {
+            this.game.add.audio('move', 0.15).play();
+        }
+        return retn || false;
     }
 
     /**
@@ -325,15 +363,32 @@ define(["app/config", "Phaser"], function(config, Phaser){
         var totalCleared = 0;
         for (var i=0; i < config.grid.numCells; ++i) {
             for (var j=0; j < config.grid.numCells; ++j) {
-                if (this.at(i, j) &&
-                    !this.at(i+1, j) && !this.at(i, j+1) &&
-                    !this.at(i-1, j) && !this.at(i, j-1)) {
+
+                if (this.at(i, j)
+                    && !this.at(i+1, j) && !this.at(i, j+1)
+                    && !this.at(i-1, j) && !this.at(i, j-1))
+                {
                     this.at(i, j).destroy();
                     totalCleared += 1;
                 }
+
             }
         }
         return totalCleared;
+    }
+
+    /**
+     * Clear all blocks on the grid.
+     */
+    Grid.prototype.clearAll = function() {
+        for (var i = 0; i < this.contents.length; i++) {
+            var obj = this.contents[i];
+            for (var key in obj) {
+                if (typeof obj[key] == 'object') {
+                    obj[key].destroy(0, true);
+                }
+            }
+        }
     }
 
     /**
