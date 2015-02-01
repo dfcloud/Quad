@@ -9,7 +9,9 @@ function(config, generator, Phaser, grid){
     var controls = {
         rotating : false,
         shifting : false,
-        postMove : function() {},
+        postMove : function() {
+            generator.showLimits();
+        },
         keys : [],
 
         /**
@@ -49,6 +51,8 @@ function(config, generator, Phaser, grid){
             for (var i=0; i < controls.keys.length; ++i) {
                 if (game.input.keyboard.isDown(controls.keys[i].key)) {
                     controls.keys[i].press();
+                } else {
+                    controls.keys[i].active = false;
                 }
             }
         }
@@ -93,7 +97,9 @@ function(config, generator, Phaser, grid){
             grid.slideRight();
     }, grid);
 
-    controls.registerControl(Phaser.Keyboard.SPACEBAR, generator.drop, generator);
+    controls.registerControl(Phaser.Keyboard.SPACEBAR, function(){
+        generator.drop(true);
+    }, generator);
 
     // Prevent the browser from taking the normal action (scrolling, etc)
     window.addEventListener("keydown", function(e) {

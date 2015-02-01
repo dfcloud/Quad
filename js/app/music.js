@@ -29,6 +29,7 @@ define(["app/config"], function(config){
          * WebAudio node which is used to crossfade
          */
         this.gain = this.game.sound.context.createGain();
+        this.gain.gain.value = 0;
 
         this.analyser.minDecibels = -140;
         this.analyser.maxDecibels = 0;
@@ -69,7 +70,6 @@ define(["app/config"], function(config){
      */
     MusicManager.prototype.play = function(music) {
         var oldMusic = this.music;
-        this.fade("out", this.crossfadeDuration/2);
 
         var playNew = function(){
             if (oldMusic) {
@@ -78,16 +78,20 @@ define(["app/config"], function(config){
                 oldMusic.destroy();
             }
 
-            this.music = this.game.add.audio(music, 1, true);
+            this.music = this.game.add.audio(music, 0, true);
             this.music.externalNode = this.gain;
             this.analyser.connect(this.music.masterGainNode);
             this.music.play();
 
-            this.fade("in", this.crossfadeDuration/2);
+            if (oldMusic)
+                this.fade("in", this.crossfadeDuration/2);
+            else
+                this.fade("in", this.crossfadeDuration*5);
         }.bind(this);
 
         // Only crossfade if there is an already playing song
         if (this.music){
+            this.fade("out", this.crossfadeDuration/2);
             setTimeout(playNew, this.crossfadeDuration);
         } else {
             playNew();
@@ -98,18 +102,20 @@ define(["app/config"], function(config){
 
     MusicManager.prototype.fade = function(direction, duration, steps) {
         var steps = steps || 100;
-        var outInterval = setInterval(function(){
-            if (this.music) {
-                if (direction === "out")
-                    this.gain.gain.value -= 1/100;
-                else
-                    this.gain.gain.value += 1/100;
-            }
-        }.bind(this), duration/100);
-
-        setTimeout(function(){
-            clearInterval(outInterval);
-        }, duration);
+        var count = 0;
+        var timer = this.game.time.create(false);
+        timer.loop(duration/100,
+            function(){
+                ++count;
+                if (this.music) {
+                    if (direction === "out")
+                        this.gain.gain.value -= 1/100;
+                    else
+                        this.gain.gain.value += 1/100;
+                }
+                if (count == 100) timer.stop();
+            }.bind(this));
+        timer.start();
     }
 
     /**

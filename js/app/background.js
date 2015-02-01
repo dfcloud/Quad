@@ -12,7 +12,7 @@ function(config, Phaser, Visualizer, music){
         var y = (Math.random() * config.game.height);// - config.game.height/2;
         this.graphics = this.game.add.graphics(x, y);
         this.game.world.sendToBack(this.graphics);
-        this.graphics.alpha = 0.5;
+        this.graphics.alpha = 0;
         this.graphics.scale = {x: 0.5, y: 0.5};
 
         this.graphics.lineStyle(2, 0x222222, 0.4);
@@ -21,6 +21,9 @@ function(config, Phaser, Visualizer, music){
                                config.game.width,
                                config.game.height);
         this.graphics.endFill();
+
+        // Fade in the blocks
+        this.game.add.tween(this.graphics).to({alpha : 0.5}, 2000).start();
 
         music.onBeat.push(function(){
             this.pulse();
@@ -78,7 +81,10 @@ function(config, Phaser, Visualizer, music){
      * @constructor
      * @alias module:app/background
      */
-    var Background = function(){}
+    var Background = function(){
+        this.body = document.getElementsByTagName("body")[0];
+        this.color = config.color.background[0];
+    }
 
     /**
      * Start displaying the background
@@ -115,18 +121,32 @@ function(config, Phaser, Visualizer, music){
     /**
      * Switch to using 'color' as a basis for a new background
      *
-     * @param {number} color - Color to use as a base for the background
+     * @param {number} targetColor - Color to use as a base for the background
      */
-    Background.prototype.newColor = function(color) {
-        //TODO gradual transition
-        var color = Phaser.Color.interpolateColor(color, 0xEEEEEE, 5, 2);
-        color = Phaser.Color.componentToHex(Math.abs(color));
+    Background.prototype.newColor = function(targetColor) {
+        var count = 0;
+        var setColor = null;
 
-        //TODO make this work in non-webkit browsers
-        var newColor = "-webkit-radial-gradient(white, #" + color + ", #" + color + ")";
-        var body = document.getElementsByTagName("body")[0];
-        body.style["background"] = newColor;
-        body.style["background-size"] = "200% 200%";
+        var timer = this.game.time.create(false);
+        timer.loop(30,
+            function(){
+                ++count;
+                if (count == 1500/30) {
+                    this.color = setColor;
+                    timer.stop();
+                }
+                setColor = Phaser.Color.interpolateColor(this.color,
+                                                         targetColor,
+                                                         1500/30,
+                                                         count);
+
+                var color = Phaser.Color.getWebRGB(setColor);
+                //TODO make this work in non-webkit browsers
+                var newColor = "-webkit-radial-gradient(white, " + color + ", " + color + ")";
+                this.body.style["background"] = newColor;
+                this.body.style["background-size"] = "200% 200%";
+            }.bind(this));
+        timer.start();
     }
 
     return new Background();

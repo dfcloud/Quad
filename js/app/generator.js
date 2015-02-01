@@ -43,6 +43,7 @@ function(config, Phaser, Quad, grid){
         this.dropTimer = null;
 
         this.timerGraphic = null;
+        this.limitGraphic = null;
 
         this.directions = [
             "top",
@@ -80,6 +81,7 @@ function(config, Phaser, Quad, grid){
         this.dropTimer.loop(speed * Phaser.Timer.SECOND,
             this.drop.bind(this));
         this.timerGraphic = this.game.add.graphics();
+        this.limitGraphic = this.game.add.graphics();
         var self=this;
 
         // Show the next 4 moves
@@ -91,10 +93,7 @@ function(config, Phaser, Quad, grid){
         ];
 
         //TODO: This should probably go somewhere else
-        var centerQuad = new Quad(game).positionAt({
-            x: self.centerCell,
-            y: self.centerCell
-        }).unbreakable();
+        this.centerQuad = new Quad(game).toCenter().unbreakable();
 
         this.spawn();
         return this;
@@ -117,6 +116,7 @@ function(config, Phaser, Quad, grid){
         this.showFutureQuads();
 
         this.dropTimer.start();
+        generator.showLimits();
         return this;
     }
 
@@ -143,8 +143,23 @@ function(config, Phaser, Quad, grid){
 
     /**
      * Drop all waiting quads onto the game grid
+     *
+     * @param {boolean} [manual=false] - If true, prevents an invalid drop
      */
-    Generator.prototype.drop = function() {
+    Generator.prototype.drop = function(manual) {
+        var manual = manual || false;
+
+        // Do not allow invalid manual drops
+        if (manual) {
+            var unviable = generator.waitingQuads.some(function(quad){
+                return !grid.getFirstAvailable(quad.direction, quad.position) ||
+                    !grid.getFirstAvailable(quad.direction, quad.position+1)
+            });
+            if (unviable) {
+                return null;
+            }
+        }
+
         this.dropTimer.stop(false);
         this.waitingQuads.map(function(quad){
             this.fallingQuads.push(quad);
@@ -170,6 +185,67 @@ function(config, Phaser, Quad, grid){
     }
 
     /**
+     * Show lines indicating unreachable blocks in the current configuration
+     */
+    Generator.prototype.showLimits = function() {
+        if (!this.waitingQuads.length)
+            return this;
+
+        var direction = this.waitingQuads[0].direction;
+        this.limitGraphic.clear();
+        this.limitGraphic.beginFill(0x111111, 0.1);
+        switch(direction.toLowerCase()) {
+        case "top":
+        case "bottom":
+            var leftLimit = config.grid.numCells/2 - grid.getLimit("right")-1;
+            var rightLimit = config.grid.numCells/2 + grid.getLimit("left")+1;
+
+            // draw left limit
+            if (leftLimit > grid.getLimit("left")) {
+                var top = grid.coordToPoint({x: leftLimit, y: 0});
+                this.limitGraphic.drawRect(top.x, top.y,
+                                           -(top.x - grid.offsets.x),
+                                           config.grid.size);
+            }
+
+            // draw right limit
+            if (rightLimit < config.grid.numCells - grid.getLimit("right")) {
+                top = grid.coordToPoint({x: rightLimit, y: 0});
+                this.limitGraphic.drawRect(top.x, top.y,
+                                           config.grid.size-(top.x-grid.offsets.x),
+                                           config.grid.size);
+            }
+            break;
+        case "left":
+        case "right":
+            var topLimit = config.grid.numCells/2 - grid.getLimit("bottom")-1;
+            var bottomLimit = config.grid.numCells/2 + grid.getLimit("top")+1;
+
+            // draw top limit
+            if (topLimit > grid.getLimit("top")) {
+                var top = grid.coordToPoint({x: 0, y: topLimit});
+                this.limitGraphic.drawRect(top.x, top.y,
+                                           config.grid.size,
+                                           -(top.y - grid.offsets.y));
+            }
+
+            // draw bottom limit
+            if (bottomLimit < config.grid.numCells - grid.getLimit("bottom")) {
+                top = grid.coordToPoint({x: 0, y: bottomLimit});
+                this.limitGraphic.drawRect(top.x, top.y,
+                                           config.grid.size,
+                                           config.grid.size-(top.y-grid.offsets.y));
+            }
+            break;
+        default:
+            this.limitGraphic.endFill();
+            throw("Invalid argument to 'showLimits': " + direction);
+        }
+        this.limitGraphic.endFill();
+        return this;
+    }
+
+    /**
      * Update the generator graphics. This should be called from the
      * Phaser update callback function.
      */
@@ -181,10 +257,16 @@ function(config, Phaser, Quad, grid){
      * Set the current level.
      */
     Generator.prototype.setLevel = function(level) {
-        this.level = level;
-        this.updateCurrentQuadLevel(this.level);
-        var speed = config.generator.speeds[this.level];
-        this.dropTimer.loop(speed * Phaser.Timer.SECOND, this.drop.bind(this));
+        if (this.level != level) {
+            this.level = level;
+            this.updateCurrentQuadLevel(this.level);
+            var speed = config.generator.speeds[this.level];
+            this.dropTimer.loop(speed * Phaser.Timer.SECOND, this.drop.bind(this));
+        }
+        this.dropTimer.stop(false);
+
+        // Pause for the level transition effects
+        this.dropTimer.start(3000);
     }
 
     /**
@@ -263,7 +345,6 @@ function(config, Phaser, Quad, grid){
         });
 
     }
-
 
     var generator = new Generator();
     return generator;

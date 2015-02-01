@@ -13,6 +13,7 @@ function(config, Phaser, music){
      */
     var Grid = function(){
         this.cellSize = config.grid.size / config.grid.numCells;
+        this.initCoord = config.grid.numCells / 2;
 
         // Center the grid
         this.offsets = {
@@ -25,8 +26,8 @@ function(config, Phaser, music){
          *
          * @type {object}
          */
-        this.middle = {x: config.grid.numCells/2,
-                       y: config.grid.numCells/2};
+        this.middle = {x: this.initCoord,
+                       y: this.initCoord};
 
         /**
          * The contents of the grid
@@ -37,6 +38,11 @@ function(config, Phaser, music){
             this.contents[i] = new Array(config.grid.numCells);
         }
     };
+
+    Grid.prototype.resetMiddle = function() {
+        this.middle = {x: this.initCoord,
+                       y: this.initCoord};
+    }
 
     /**
      * Show the grid of 'cells' that the blocks can be moved around on
@@ -73,6 +79,11 @@ function(config, Phaser, music){
                 }
             }
         }
+        this.graphics.endFill();
+
+        this.graphics.beginFill(0x111111, 0.5);
+        this.graphics.drawRect(0, config.grid.size/2-1, config.grid.size, 2);
+        this.graphics.drawRect(config.grid.size/2-1, 0, 2, config.grid.size);
         this.graphics.endFill();
         return this;
     }
@@ -146,6 +157,56 @@ function(config, Phaser, music){
         default:
             throw("Invalid argument to 'directionToPoint': " + direction);
         }
+    }
+
+    /**
+     * Determine the number of cells between the wall in 'direction' and the
+     * furthest block in that direction.
+     *
+     * @param {string} direction - One of 'top', 'right', 'bottom', 'left'
+     */
+    Grid.prototype.getLimit = function(direction) {
+        switch(direction.toLowerCase()) {
+        case "top":
+            for (var i=0; i < config.grid.numCells; ++i) {
+                if (this.contents[i].some(function(cell) {
+                    return typeof(cell) !== "undefined"
+                })) {
+                    return i;
+                }
+            }
+            break;
+        case "right":
+            for (var i=config.grid.numCells-1; i >= 0; --i) {
+                for (var j=0; j < config.grid.numCells; ++j) {
+                    if (this.contents[j][i]) {
+                        return (config.grid.numCells-1)-i;
+                    }
+                }
+            }
+            break;
+        case "bottom":
+            for (var i=config.grid.numCells-1; i >= 0; --i) {
+                if (this.contents[i].some(function(cell) {
+                    return typeof(cell) !== "undefined"
+                })) {
+                    return (config.grid.numCells-1)-i;
+                }
+            }
+            break;
+        case "left":
+            for (var i=0; i < config.grid.numCells; ++i) {
+                for (var j=0; j < config.grid.numCells; ++j) {
+                    if (this.contents[j][i]) {
+                        return i;
+                    }
+                }
+            }
+            break;
+        default:
+            throw("Invalid argument to 'getLimit': " + direction);
+        }
+        return null;
     }
 
     /**
